@@ -1,5 +1,3 @@
-);
-
 // --- API Helper Functions ---
 const fetchFromTMDB = async (endpoint, params = '') => {
     try {
