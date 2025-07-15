@@ -1,4 +1,22 @@
-// --- API Helper Functions ---
+import React, { useState, useEffect, useCallback } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, addDoc, onSnapshot, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+const TMDB_API_KEY = '6fda98e1cd76ad714571ff4d7cd86f46';
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/';
+
+const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>);
+const PlayIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>);
+const AddToListIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>);
+const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>);
+const CloseIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>);
+const LoadingSpinner = () => (<div className="w-8 h-8 border-4 border-t-transparent border-red-500 rounded-full animate-spin"></div>);
+
 const fetchFromTMDB = async (endpoint, params = '') => {
     try {
         const response = await fetch(`${TMDB_BASE_URL}${endpoint}?api_key=${TMDB_API_KEY}&${params}`);
@@ -17,8 +35,6 @@ const formatMovieData = (movie) => ({
     posterUrl: movie.poster_path ? `${IMAGE_BASE_URL}w500${movie.poster_path}` : 'https://placehold.co/400x600/1f2937/ffffff?text=No+Image',
     imageUrl: movie.backdrop_path ? `${IMAGE_BASE_URL}original${movie.backdrop_path}` : 'https://placehold.co/1920x1080/1f2937/ffffff?text=No+Image',
 });
-
-// --- Components ---
 
 const Header = ({ user, onSearch }) => {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -108,7 +124,7 @@ const MovieCarousel = ({ title, movies, onMovieClick, isLoading, onClear, query 
         return <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-64 flex items-center"><LoadingSpinner /></div>;
     }
     if (!movies || movies.length === 0) {
-        if (onClear) { // This means it's a search result with no movies
+        if (onClear) {
             return (
                  <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between mb-4">
@@ -203,7 +219,6 @@ const Footer = () => (
     </footer>
 );
 
-// --- Main App Component ---
 export default function App() {
     const [user, setUser] = useState(null);
     const [db, setDb] = useState(null);
@@ -221,9 +236,8 @@ export default function App() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMovie, setSelectedMovie] = useState(null);
 
-    // --- Firebase Initialization ---
     useEffect(() => {
-        if (firebaseConfig.apiKey) {
+        if (firebaseConfig && Object.keys(firebaseConfig).length > 0) {
             const app = initializeApp(firebaseConfig);
             const authInstance = getAuth(app);
             const dbInstance = getFirestore(app);
@@ -243,12 +257,10 @@ export default function App() {
         }
     }, []);
 
-    // --- Fetch Initial Movie Data from TMDB ---
     useEffect(() => {
         const init = async () => {
             setIsLoading(true);
             
-            // Fetch Trending
             const trendingData = await fetchFromTMDB('/trending/movie/week');
             if (trendingData?.results) {
                 const formatted = trendingData.results.map(formatMovieData);
@@ -256,13 +268,11 @@ export default function App() {
                 setTrendingMovies(formatted);
             }
 
-            // Fetch Top Rated
             const topRatedData = await fetchFromTMDB('/movie/top_rated');
             if (topRatedData?.results) {
                 setTopRatedMovies(topRatedData.results.map(formatMovieData));
             }
 
-            // Fetch Free to Watch Movies
             const freeMoviesData = await fetchFromTMDB('/discover/movie', 'with_watch_monetization_types=free&watch_region=US');
             if (freeMoviesData?.results) {
                 setFreeMovies(freeMoviesData.results.map(formatMovieData));
@@ -273,7 +283,6 @@ export default function App() {
         init();
     }, []);
 
-    // --- Firestore "My List" Listener ---
     useEffect(() => {
         if (!user || !db) {
             setMyList([]);
